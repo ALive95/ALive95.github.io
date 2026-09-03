@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tabellone Serie A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@700;800&family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --carta:#F7F6F2; --inchiostro:#17211B; --grigio:#6B7570; --linea:#DDDCD4;
+  --prato:#1E7A45; --prato-scuro:#14532D; --card:#FFFFFF;
+  --live:#D3382C; --pen:#C79A00; --giallo:#F5C518; --rosso:#D3382C;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{font-family:Inter,system-ui,sans-serif;background:var(--carta);color:var(--inchiostro);font-size:15px;line-height:1.45;padding-bottom:30px}
+
+.top{position:sticky;top:0;z-index:20}
+header{background:var(--prato-scuro);color:#fff;padding:13px 16px 11px}
+header h1{font-family:'Archivo Expanded',sans-serif;font-weight:800;font-size:19px;letter-spacing:.02em;text-transform:uppercase}
+header h1 span{color:#8FD9AC}
+.statusbar{display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:#A9C7B4;margin-top:3px}
+.pitchline{height:3px;background:repeating-linear-gradient(90deg,var(--prato) 0 24px,#2b9a5c 24px 48px)}
+
+/* barra delle giornate */
+.rounds{background:var(--carta);border-bottom:1px solid var(--linea);display:flex;gap:6px;overflow-x:auto;padding:8px 12px;scrollbar-width:none}
+.rounds::-webkit-scrollbar{display:none}
+.rbtn{flex:0 0 auto;min-width:34px;height:34px;padding:0 4px;border-radius:9px;border:1px solid var(--linea);background:#fff;color:var(--grigio);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;cursor:pointer}
+.rbtn.cur{border-color:var(--prato);color:var(--prato-scuro)}
+.rbtn.sel{background:var(--prato-scuro);border-color:var(--prato-scuro);color:#fff}
+@media (min-width:760px){
+  .rounds{flex-wrap:wrap;overflow-x:visible;justify-content:center;gap:5px;max-width:760px;margin:0 auto}
+  .rbtn{min-width:30px;height:30px;font-size:15px}
+}
+
+main{padding:14px 12px 20px;max-width:640px;margin:0 auto}
+.group-label{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--grigio);margin:14px 4px 8px}
+.group-label:first-child{margin-top:2px}
+
+.match{background:var(--card);border:1px solid var(--linea);border-radius:14px;margin-bottom:10px;overflow:hidden}
+.mhead{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding:14px 14px 6px}
+.team{font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:600;line-height:1.1;display:flex;align-items:center;gap:7px}
+.team.h{justify-content:flex-end}
+.team .tlogo{width:22px;height:22px;object-fit:contain;flex:0 0 auto}
+.score{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;letter-spacing:.02em;min-width:64px;text-align:center;padding:2px 6px;border-radius:8px;background:#F2F1EC}
+.match.live .score{background:#FBEAE8;color:var(--live)}
+.badge{display:block;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-top:3px;color:var(--grigio)}
+.match.live .badge{color:var(--live)}
+.match.live .badge::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--live);margin-right:5px;vertical-align:middle;animation:blink 1.4s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.when{text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:.03em;color:var(--grigio);padding:0 14px 10px}
+
+/* eventi: gol e cartellini, divisi casa (sx) / ospite (dx) */
+.events{border-top:1px dashed var(--linea);padding:9px 14px 10px;display:grid;grid-template-columns:1fr 1fr;gap:3px 12px}
+.ev{font-size:14px;display:flex;align-items:baseline;gap:6px}
+.ev.away{grid-column:2;flex-direction:row-reverse;text-align:right}
+.ev.home{grid-column:1}
+.ev .ic{flex:0 0 auto;font-size:13px;line-height:1}
+.ev .card{display:inline-block;width:10px;height:13px;border-radius:2px;transform:translateY(1px)}
+.ev .card.yellow{background:var(--giallo)}
+.ev .card.red{background:var(--rosso)}
+.ev .txt .min{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--prato-scuro)}
+.ev.card-red .txt .min,.ev.card-yellow .txt .min{color:var(--grigio)}
+.noyet{color:var(--grigio);font-size:13px;padding:2px 0;grid-column:1 / -1}
+.ko{color:var(--grigio);font-size:13px;text-align:center;padding-top:2px;grid-column:1 / -1}
+
+/* azioni: link + toggle formazioni */
+.actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-top:1px solid var(--linea);padding:9px 14px}
+.actions a,.actions button{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--prato-scuro);background:#F2F1EC;border:1px solid var(--linea);border-radius:20px;padding:4px 12px;text-decoration:none;cursor:pointer}
+.actions button:disabled{color:var(--linea);cursor:default}
+.actions .grow{margin-left:auto}
+
+.lineups{border-top:1px dashed var(--linea);padding:11px 14px 13px;display:none;grid-template-columns:1fr 1fr;gap:14px}
+.lineups.open{display:grid}
+.lu h4{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:.04em;color:var(--prato-scuro);margin-bottom:5px}
+.lu h4 span{color:var(--grigio);font-weight:600}
+.lu .p{font-size:13px;line-height:1.5}
+.lu .p b{font-family:'Barlow Condensed',sans-serif;font-weight:600;color:var(--grigio);display:inline-block;min-width:20px}
+.lu .bench{margin-top:6px;color:var(--grigio);font-size:12.5px;line-height:1.5}
+.lu .bench .bt{text-transform:uppercase;letter-spacing:.06em;font-size:10.5px;font-weight:700;display:block;margin-bottom:2px}
+.lu .subs{margin-top:6px;font-size:12.5px;line-height:1.55}
+.lu .subs .bt{text-transform:uppercase;letter-spacing:.06em;font-size:10.5px;font-weight:700;color:var(--grigio);display:block;margin-bottom:2px}
+.lu .subs .sub .min{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--prato-scuro);margin-right:4px}
+.lu .subs .sub .out{color:var(--grigio)}
+
+.msg{text-align:center;color:var(--grigio);padding:40px 16px;font-size:14px}
+.spin{width:26px;height:26px;border:3px solid var(--linea);border-top-color:var(--prato);border-radius:50%;margin:0 auto 12px;animation:rot 1s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.errbar{background:#FDF3D7;color:#8A6A06;font-size:12.5px;text-align:center;padding:7px 12px}
+</style>
+</head>
+<body>
+<div class="top">
+  <header>
+    <h1>Tabellone <span>Serie A</span></h1>
+    <div class="statusbar"><span id="clock">—</span></div>
+  </header>
+  <div class="pitchline"></div>
+  <nav class="rounds" id="rounds"></nav>
+</div>
+<div id="errbar" class="errbar" style="display:none"></div>
+
+<main id="app">
+  <div class="msg"><div class="spin"></div>Carico la stagione…</div>
+</main>
+
+<script>
+/* ============================================================================
+   Pagina autosufficiente: legge direttamente da ESPN (endpoint pubblico non
+   ufficiale) dal browser di chi guarda — l'unico canale che ESPN non blocca.
+   All'avvio scarica tutte le partite della stagione e le raggruppa in giornate
+   (ogni squadra gioca una volta per giornata: quando una si ripete, è iniziata
+   la giornata dopo). Aprendo una giornata scarica il "summary" di ogni partita
+   per gol, cartellini e formazioni. Nessun file esterno, nessun Worker.
+============================================================================ */
+const ESPN = 'https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1';
+const TOTAL_ROUNDS_DEFAULT = 38;
+const REFRESH_SECONDS = 60;
+
+const app = document.getElementById('app');
+const clock = document.getElementById('clock');
+const errbar = document.getElementById('errbar');
+const roundsBar = document.getElementById('rounds');
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const pad2 = n => String(n).padStart(2,'0');
+
+const GROUPS = [['live','In corso'],['finished','Finite'],['upcoming','Da giocare']];
+const GTAG = {penalty:'rig.', own:'aut.'};
+
+let ROUNDS = {};        // { n: [eventi scoreboard] }
+let CURRENT = 1;        // giornata corrente
+let SELECTED = null;    // giornata mostrata
+const cache = {};       // id partita -> { events, lineups } dal summary
+
+/* ---------- formattazione ------------------------------------------------- */
+// particelle che fanno parte del cognome (De Rossi, Di Lorenzo, van Dijk...)
+const NAME_PARTICLES = new Set(['de','di','da','del','della','dei','degli','van','von','der','den','dos','das','la','le','lo','du',"d'","o'",'mc','mac','ten','ter','al','el']);
+// restituisce il nome con il cognome in <strong>
+function boldSurname(name){
+  const s = String(name||'').trim();
+  if(!s) return '';
+  const parts = s.split(/\s+/);
+  if(parts.length===1) return `<strong>${esc(s)}</strong>`;
+  let i = parts.length-1;
+  while(i>0 && NAME_PARTICLES.has(parts[i-1].toLowerCase())) i--;
+  const first = parts.slice(0,i).join(' '), last = parts.slice(i).join(' ');
+  return (first?esc(first)+' ':'') + `<strong>${esc(last)}</strong>`;
+}
+
+function whenLabel(iso){
+  if(!iso) return 'Data da definire';
+  const d = new Date(iso);
+  const day = d.toLocaleDateString('it-IT',{weekday:'short',day:'2-digit',month:'short'});
+  const hm  = d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+  return day + ' · ' + hm;
+}
+
+/* ---------- riga evento (gol o cartellino) -------------------------------- */
+function eventRow(e){
+  const min = e.minute!=null ? e.minute+"'" : '';
+  let ic, extra='';
+  if(e.type==='yellow'){ ic = `<span class="card yellow"></span>`; extra=' card-yellow'; }
+  else if(e.type==='red'){ ic = `<span class="card red"></span>`; extra=' card-red'; }
+  else { ic = '\u26BD'; }  // pallone per i gol
+  const tag = GTAG[e.type] ? ', '+GTAG[e.type] : '';
+  const txt = `<span class="txt">${boldSurname(e.player)} <span class="min">(${min}${tag})</span></span>`;
+  return `<div class="ev ${e.team}${extra}"><span class="ic">${ic}</span>${txt}</div>`;
+}
+
+/* ---------- formazioni ---------------------------------------------------- */
+function sideLineup(side, l){
+  if(!l) return '';
+  const start = (l.start||[]).map(p=>`<div class="p"><b>${esc(p.n||'')}</b> ${boldSurname(p.name)}</div>`).join('');
+  const bench = (l.bench||[]).map(p=>boldSurname(p)).join(', ');
+  const subs = (l.subs||[]).map(s=>{
+    const m = s.minute!=null ? s.minute+"'" : '';
+    return `<div class="sub"><span class="min">${m}</span>${boldSurname(s.in)}${s.out?` <span class="out">(esce ${boldSurname(s.out)})</span>`:''}</div>`;
+  }).join('');
+  return `<div class="lu">
+    <h4>${esc(side)} <span>${esc(l.formation||'')}</span></h4>
+    ${start}
+    ${bench?`<div class="bench"><span class="bt">Panchina</span>${bench}</div>`:''}
+    ${subs?`<div class="subs"><span class="bt">Cambi</span>${subs}</div>`:''}
+  </div>`;
+}
+
+/* ---------- card partita -------------------------------------------------- */
+function matchCard(m){
+  const badge = m.status==='live' ? (m.clock || 'Live')
+             : m.status==='finished' ? 'Finita' : 'Da giocare';
+
+  let body;
+  if(m.status==='upcoming'){
+    body = `<div class="events"><div class="ko">Calcio d'inizio ${m.kickoff?whenLabel(m.kickoff):'da definire'}</div></div>`;
+  } else {
+    const evs = m.events||[];
+    body = evs.length
+      ? `<div class="events">${evs.map(eventRow).join('')}</div>`
+      : `<div class="events"><div class="noyet">Nessun gol o cartellino.</div></div>`;
+  }
+
+  const espn = m.espn ? `<a href="${esc(m.espn)}" target="_blank" rel="noopener">ESPN</a>` : '';
+  const hasLine = m.lineups && (m.lineups.home || m.lineups.away);
+  const lineBtn = `<button class="grow" onclick="toggleLineups('${esc(m.id)}')" ${hasLine?'':'disabled'}>Formazioni</button>`;
+  const lineBox = hasLine
+    ? `<div class="lineups" id="lu-${esc(m.id)}">${sideLineup(m.home,m.lineups.home)}${sideLineup(m.away,m.lineups.away)}</div>`
+    : '';
+
+  return `<div class="match ${m.status}">
+    <div class="mhead">
+      <div class="team h"><span>${esc(m.home)}</span>${m.homeLogo?`<img class="tlogo" src="${esc(m.homeLogo)}" alt="" loading="lazy">`:''}</div>
+      <div><div class="score">${m.homeScore??0}&ndash;${m.awayScore??0}</div><span class="badge">${badge}</span></div>
+      <div class="team">${m.awayLogo?`<img class="tlogo" src="${esc(m.awayLogo)}" alt="" loading="lazy">`:''}<span>${esc(m.away)}</span></div>
+    </div>
+    <div class="when">${whenLabel(m.kickoff)}</div>
+    ${body}
+    <div class="actions">
+      ${espn}
+      ${lineBtn}
+    </div>
+    ${lineBox}
+  </div>`;
+}
+
+function toggleLineups(id){
+  const el = document.getElementById('lu-'+id);
+  if(el) el.classList.toggle('open');
+}
+
+/* ---------- barra giornate ------------------------------------------------ */
+function buildRoundsBar(){
+  const total = Object.keys(ROUNDS).length || TOTAL_ROUNDS_DEFAULT;
+  let html = '';
+  for(let n=1;n<=total;n++){
+    const cls = 'rbtn' + (n===CURRENT?' cur':'') + (n===SELECTED?' sel':'');
+    html += `<button class="${cls}" onclick="selectRound(${n})">${n}</button>`;
+  }
+  roundsBar.innerHTML = html;
+  const selBtn = roundsBar.querySelector('.rbtn.sel');
+  if(selBtn && roundsBar.scrollWidth > roundsBar.clientWidth)
+    selBtn.scrollIntoView({inline:'center',block:'nearest'});
+}
+
+/* ---------- rendering ----------------------------------------------------- */
+function sortMatches(m){
+  const rank = {live:0, finished:1, upcoming:2};
+  return m.slice().sort((a,b) =>
+    (rank[a.status]-rank[b.status]) ||
+    ((a.kickoff||'') < (b.kickoff||'') ? -1 : 1));
+}
+
+function render(matches){
+  const ms = sortMatches(matches||[]);
+  if(!ms.length){ app.innerHTML = `<div class="msg">Nessuna partita in questa giornata.</div>`; return; }
+  let html = '';
+  for(const [key,label] of GROUPS){
+    const g = ms.filter(m=>m.status===key);
+    if(!g.length) continue;
+    html += `<div class="group-label">${label}</div>` + g.map(matchCard).join('');
+  }
+  app.innerHTML = html;
+}
+
+/* ---------- lettura da ESPN ---------------------------------------------- */
+// tutte le partite della stagione, raggruppate in giornate
+async function fetchSeason(){
+  const board = await fetch(ESPN+'/scoreboard?_='+Date.now(),{cache:'no-store'}).then(r=>{
+    if(!r.ok) throw new Error('HTTP '+r.status); return r.json();
+  });
+  const lg = board.leagues[0];
+  const parse = s => new Date(Date.UTC(+s.slice(0,4), +s.slice(5,7)-1, +s.slice(8,10)));
+  const fmt = d => ''+d.getUTCFullYear()+pad2(d.getUTCMonth()+1)+pad2(d.getUTCDate());
+  const start = parse(lg.season.startDate), end = parse(lg.season.endDate);
+
+  const ranges = [];
+  let cur = new Date(start);
+  while(cur <= end){
+    const blkEnd = new Date(Math.min(cur.getTime()+13*864e5, end.getTime()));
+    ranges.push(fmt(cur)+'-'+fmt(blkEnd));
+    cur = new Date(blkEnd.getTime()+864e5);
+  }
+
+  const results = await Promise.all(ranges.map(rng =>
+    fetch(ESPN+'/scoreboard?dates='+rng,{cache:'no-store'})
+      .then(r=>r.ok?r.json():{events:[]}).catch(()=>({events:[]}))
+  ));
+
+  const seen = new Set(), events = [];
+  const addEvents = list => { for(const ev of (list||[])) if(!seen.has(ev.id)){ seen.add(ev.id); events.push(ev); } };
+  addEvents(board.events);                 // "oggi" fresco: ha precedenza sui blocchi stagionali in cache
+  for(const d of results) addEvents(d.events);
+  events.sort((a,b)=>((a.date||'') < (b.date||'') ? -1 : 1));
+
+  ROUNDS = groupRounds(events);
+  CURRENT = currentRoundOf(ROUNDS);
+}
+
+function groupRounds(events){
+  const rounds = {}; let cur = [], seen = new Set(), n = 1;
+  for(const ev of events){
+    const ids = ev.competitions[0].competitors.map(c=>c.id);
+    if(ids.some(id=>seen.has(id))){ rounds[n]=cur; n++; cur=[]; seen=new Set(); }
+    cur.push(ev); ids.forEach(id=>seen.add(id));
+  }
+  if(cur.length) rounds[n]=cur;
+  return rounds;
+}
+
+function currentRoundOf(rounds){
+  const now = Date.now(); let cur = 1;
+  for(const n of Object.keys(rounds).map(Number).sort((a,b)=>a-b)){
+    const first = rounds[n].map(e=>e.date).filter(Boolean).sort()[0];
+    if(first && new Date(first).getTime() <= now) cur = n;
+  }
+  return cur;
+}
+
+// gol, cartellini e formazioni dal summary di una partita
+function extractFromSummary(sm, homeId){
+  const events = []; let lineups = null;
+  const side = id => String(id) === String(homeId) ? 'home' : 'away';
+  const minOf = o => { const c=(o.clock&&o.clock.displayValue)||''; const m=String(c).match(/\d+/); return m?+m[0]:null; };
+
+  for(const d of (sm?.header?.competitions?.[0]?.details || [])){
+    if(!d.scoringPlay) continue;
+    events.push({ minute:minOf(d), team:side(d.team&&d.team.id),
+      player:(d.participants&&d.participants[0]&&d.participants[0].athlete&&d.participants[0].athlete.displayName)||'—',
+      type:d.penaltyKick?'penalty':d.ownGoal?'own':'goal' });
+  }
+  for(const k of (sm.keyEvents || [])){
+    const t = (k.type&&k.type.text)||'';
+    const type = t.includes('Yellow Card') ? 'yellow' : t.includes('Red Card') ? 'red' : null;
+    if(!type) continue;
+    events.push({ minute:minOf(k), team:side(k.team&&k.team.id),
+      player:(k.participants&&k.participants[0]&&k.participants[0].athlete&&k.participants[0].athlete.displayName)||'—', type });
+  }
+  events.sort((a,b)=>(a.minute||0)-(b.minute||0));
+
+  // sostituzioni: assunzione participants[0]=entra, participants[1]=esce
+  const subs = [];
+  for(const k of (sm.keyEvents || [])){
+    if(!/substitution/i.test((k.type&&k.type.text)||'')) continue;
+    const names = (k.participants||[]).map(p=>p.athlete&&p.athlete.displayName).filter(Boolean);
+    subs.push({ minute:minOf(k), team:side(k.team&&k.team.id), in:names[0]||'', out:names[1]||'' });
+  }
+  subs.sort((a,b)=>(a.minute||0)-(b.minute||0));
+
+  if((sm.rosters||[]).length){
+    lineups = {};
+    for(const r of sm.rosters){
+      const s = r.homeAway==='home' ? 'home' : 'away';
+      const start = [], bench = [];
+      for(const p of (r.roster||[])){
+        const name = (p.athlete&&p.athlete.displayName)||'';
+        if(p.starter) start.push({ n:p.jersey||'', name, o:+(p.formationPlace||99) });
+        else bench.push(name);
+      }
+      start.sort((a,b)=>a.o-b.o);
+      lineups[s] = { formation:r.formation||'', start, bench, subs:subs.filter(x=>x.team===s) };
+    }
+  }
+  return { events, lineups };
+}
+
+// costruisce l'oggetto partita per il rendering
+async function buildMatch(ev){
+  const cs = ev.competitions[0].competitors;
+  const home = cs.find(c=>c.homeAway==='home') || cs[0];
+  const away = cs.find(c=>c.homeAway==='away') || cs[1];
+  const state = ev.status && ev.status.type && ev.status.type.state;   // pre | in | post
+  const status = state==='in' ? 'live' : state==='post' ? 'finished' : 'upcoming';
+  let clock = '';
+  if(status==='live'){
+    const st = ev.status||{}, t = st.type||{};
+    if((t.name||'')==='STATUS_HALFTIME' || /halftime|intervallo/i.test(t.description||''))
+      clock = 'Intervallo';
+    else
+      clock = String(st.displayClock || t.shortDetail || '').trim();
+  }
+  const nameOf = c => c.team.shortDisplayName || c.team.name || '?';
+  const scoreOf = c => { const n = parseInt(c.score,10); return Number.isFinite(n)?n:0; };
+  const logoOf = c => (c.team && (c.team.logo || (c.team.logos && c.team.logos[0] && c.team.logos[0].href))) || '';
+
+  let events = [], lineups = null;
+  if(status !== 'upcoming'){
+    if(!cache[ev.id]){
+      const sm = await fetch(ESPN+'/summary?event='+ev.id).then(r=>r.ok?r.json():null).catch(()=>null);
+      cache[ev.id] = sm ? extractFromSummary(sm, home.id) : { events:[], lineups:null };
+    }
+    ({ events, lineups } = cache[ev.id]);
+  }
+  return { id:ev.id, status, clock, home:nameOf(home), away:nameOf(away),
+    homeLogo:logoOf(home), awayLogo:logoOf(away),
+    homeScore:scoreOf(home), awayScore:scoreOf(away), kickoff:ev.date||null,
+    events, lineups, espn:'https://www.espn.com/soccer/match/_/gameId/'+ev.id };
+}
+
+async function selectRound(n){
+  SELECTED = n; buildRoundsBar();
+  app.innerHTML = `<div class="msg"><div class="spin"></div>Carico la giornata ${n}…</div>`;
+  const evs = ROUNDS[n] || [];
+  if(!evs.length){ app.innerHTML = `<div class="msg">Giornata ${n} non disponibile.</div>`; return; }
+  const matches = await Promise.all(evs.map(buildMatch));
+  render(matches);
+  stamp();
+}
+
+// aggiorna solo la giornata corrente (se la stai guardando)
+async function refreshCurrent(){
+  if(SELECTED !== CURRENT) return;
+  const evs = ROUNDS[CURRENT] || [];
+  const dates = evs.map(e=>e.date).filter(Boolean).sort();
+  if(!dates.length) return;
+  const fmt = iso => { const d=new Date(iso); return ''+d.getUTCFullYear()+pad2(d.getUTCMonth()+1)+pad2(d.getUTCDate()); };
+  const rng = fmt(dates[0])+'-'+fmt(dates[dates.length-1]);
+  try{
+    const d = await fetch(ESPN+'/scoreboard?dates='+rng+'&_='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null);
+    if(d && d.events){
+      const byId = {}; d.events.forEach(e=>byId[e.id]=e);
+      ROUNDS[CURRENT] = evs.map(e=>byId[e.id]||e);
+      ROUNDS[CURRENT].forEach(e=>{
+        const st = e.status && e.status.type && e.status.type.state;
+        if(st !== 'post') delete cache[e.id];   // ricarica gol/stato delle partite non finite
+      });
+    }
+  }catch(_){}
+  if(SELECTED === CURRENT) selectRound(CURRENT);
+}
+
+function stamp(){
+  clock.textContent = 'Aggiornato ' + new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+async function start(){
+  try{
+    await fetchSeason();
+  }catch(e){
+    errbar.style.display='block';
+    errbar.textContent='Non riesco a contattare ESPN. Riprova tra poco.';
+    app.innerHTML = `<div class="msg">Impossibile caricare i dati.</div>`;
+    return;
+  }
+  SELECTED = CURRENT;
+  buildRoundsBar();
+  await selectRound(CURRENT);
+  setInterval(refreshCurrent, REFRESH_SECONDS*1000);
+}
+
+start();
+</script>
+<script data-goatcounter="https://11235.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>
