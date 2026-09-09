@@ -26,6 +26,24 @@ header h1 span{color:#8FD9AC}
 .switch a.on{background:#fff;color:var(--prato-scuro);border-color:#fff}
 .pitchline{height:3px;background:repeating-linear-gradient(90deg,var(--prato) 0 24px,#2b9a5c 24px 48px)}
 
+/* selettore delle viste */
+.views{background:var(--carta);display:flex;gap:6px;padding:8px 12px 0;max-width:640px;margin:0 auto}
+.vbtn{flex:1 1 0;height:32px;border-radius:9px;border:1px solid var(--linea);background:#fff;color:var(--grigio);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.vbtn.sel{background:var(--prato-scuro);border-color:var(--prato-scuro);color:#fff}
+
+/* tabelle: classifica e marcatori */
+.tab{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--linea);border-radius:14px;overflow:hidden;margin-bottom:10px}
+.tab th{font-family:'Barlow Condensed',sans-serif;font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--grigio);text-align:right;padding:9px 8px;border-bottom:1px solid var(--linea);background:var(--carta)}
+.tab td{padding:8px;font-size:14px;text-align:right;border-bottom:1px solid var(--linea)}
+.tab tr:last-child td{border-bottom:0}
+.tab th.l,.tab td.l{text-align:left}
+.tab td.pos{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;color:var(--grigio);width:28px;padding-right:2px}
+.tab td.big{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px}
+.tab td.sq{font-family:'Barlow Condensed',sans-serif;font-size:13px;color:var(--grigio);white-space:nowrap}
+.tab .tlogo{width:18px;height:18px;object-fit:contain;vertical-align:-4px;margin-right:6px}
+.tab tr.cut td{border-bottom:2px solid var(--prato-scuro)}
+.tabnote{color:var(--grigio);font-size:12.5px;line-height:1.4;margin:0 4px 16px}
+
 /* barra delle giornate */
 .rounds{background:var(--carta);border-bottom:1px solid var(--linea);display:flex;gap:6px;overflow-x:auto;padding:8px 12px;scrollbar-width:none}
 .rounds::-webkit-scrollbar{display:none}
@@ -106,6 +124,7 @@ main{padding:14px 12px 20px;max-width:640px;margin:0 auto}
     </div>
   </header>
   <div class="pitchline"></div>
+  <nav class="views" id="views"></nav>
   <nav class="rounds" id="rounds"></nav>
 </div>
 <div id="errbar" class="errbar" style="display:none"></div>
@@ -443,7 +462,6 @@ async function selectRound(n){
 
 // aggiorna solo la giornata corrente (se la stai guardando)
 async function refreshCurrent(){
-  if(SELECTED !== CURRENT) return;
   const evs = ROUNDS[CURRENT] || [];
   const dates = evs.map(e=>e.date).filter(Boolean).sort();
   if(!dates.length) return;
@@ -460,7 +478,191 @@ async function refreshCurrent(){
       });
     }
   }catch(_){}
-  if(SELECTED === CURRENT) selectRound(CURRENT);
+  if(VIEW !== 'partite' || SELECTED !== CURRENT) return;
+  const matches = await Promise.all((ROUNDS[CURRENT]||[]).map(buildMatch));
+  render(matches);
+  stamp();
+}
+
+const CUTS = [17];
+const CUTNOTE = "La riga separa le ultime tre posizioni: quelle retrocedono in Serie B.";
+
+/* ---------- viste: partite, classifica, marcatori --------------------------
+   La classifica arriva dall'endpoint standings di ESPN (percorso /apis/v2/,
+   quello /apis/site/v2/ risponde vuoto). I marcatori si provano da due fonti
+   diverse: se nessuna risponde, la vista lo dice invece di restare vuota.
+--------------------------------------------------------------------------- */
+const LEAGUE = ESPN.split('/').pop();
+const V2   = 'https://site.api.espn.com/apis/v2/sports/soccer/'+LEAGUE;
+const WEB  = 'https://site.web.api.espn.com/apis/common/v3/sports/soccer/'+LEAGUE;
+const CORE = 'https://sports.core.api.espn.com/v2/sports/soccer/leagues/'+LEAGUE;
+const VIEWS = [['partite','Partite'],['classifica','Classifica'],['marcatori','Marcatori']];
+const viewsBar = document.getElementById('views');
+let VIEW = 'partite';
+const dati = { classifica:null, marcatori:null };
+
+function buildViewBar(){
+  viewsBar.innerHTML = VIEWS.map(([k,l]) =>
+    `<button class="vbtn${k===VIEW?' sel':''}" onclick="showView('${k}')">${l}</button>`).join('');
+}
+
+async function showView(v){
+  VIEW = v; buildViewBar();
+  roundsBar.style.display = (v==='partite') ? '' : 'none';
+  if(v==='partite') return selectRound(SELECTED || CURRENT);
+  app.innerHTML = `<div class="msg"><div class="spin"></div>Carico…</div>`;
+  try{
+    if(v==='classifica'){
+      if(!dati.classifica) dati.classifica = await loadStandings();
+      renderStandings(dati.classifica);
+    }else{
+      if(!dati.marcatori) dati.marcatori = await loadScorers();
+      if(!dati.marcatori.length){ dati.marcatori = null; throw new Error('vuota'); }
+      renderScorers(dati.marcatori);
+    }
+    stamp();
+  }catch(_){
+    app.innerHTML = `<div class="msg">Dati non disponibili in questo momento.<br>Riprova fra qualche minuto.</div>`;
+  }
+}
+
+// legge una statistica per nome, provando piu' varianti
+function statOf(stats, ...names){
+  for(const n of names){
+    const s = (stats||[]).find(x => x.name===n || x.abbreviation===n);
+    if(s) return (s.displayValue!=null ? s.displayValue : s.value);
+  }
+  return '';
+}
+
+/* ---------- classifica ---------------------------------------------------- */
+async function loadStandings(){
+  const d = await fetch(V2+'/standings?_='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null);
+  if(!d) throw new Error('standings');
+  const gruppi = [];
+  const add = (nome, st) => { if(st && st.entries && st.entries.length) gruppi.push({nome:nome||'', entries:st.entries.slice()}); };
+  if(Array.isArray(d.children) && d.children.length) d.children.forEach(c => add(c.name, c.standings));
+  else add(d.name, d.standings);
+  if(!gruppi.length) throw new Error('standings vuota');
+  for(const g of gruppi){
+    const pos = e => parseInt(statOf(e.stats,'rank'),10);
+    if(g.entries.every(e => Number.isFinite(pos(e)))) g.entries.sort((a,b)=>pos(a)-pos(b));
+  }
+  return gruppi;
+}
+
+function standingsTable(g, unico){
+  const taglia = unico && g.entries.length >= 20;
+  const righe = g.entries.map((e,i) => {
+    const t = e.team || {};
+    const logo = t.logo || (t.logos && t.logos[0] && t.logos[0].href) || '';
+    const n = i+1;
+    const cut = (taglia && CUTS.includes(n)) ? ' class="cut"' : '';
+    return `<tr${cut}>
+      <td class="pos">${n}</td>
+      <td class="l">${logo?`<img class="tlogo" src="${esc(logo)}" alt="" loading="lazy">`:''}${esc(t.shortDisplayName||t.displayName||'')}</td>
+      <td>${esc(statOf(e.stats,'gamesPlayed','GP'))}</td>
+      <td>${esc(statOf(e.stats,'pointDifferential','goalDifference','GD'))}</td>
+      <td class="big">${esc(statOf(e.stats,'points','P'))}</td>
+    </tr>`;
+  }).join('');
+  return (g.nome && !unico ? `<div class="group-label">${esc(g.nome)}</div>` : '') +
+    `<table class="tab">
+      <tr><th class="l" colspan="2">Squadra</th><th>G</th><th>DR</th><th>Pt</th></tr>
+      ${righe}
+    </table>`;
+}
+
+function renderStandings(gruppi){
+  const unico = gruppi.length === 1;
+  let html = `<div class="roundtitle">Classifica</div>`;
+  html += gruppi.map(g => standingsTable(g, unico)).join('');
+  if(unico && gruppi[0].entries.length >= 20) html += `<p class="tabnote">${CUTNOTE}</p>`;
+  app.innerHTML = html;
+}
+
+/* ---------- marcatori ----------------------------------------------------- */
+async function loadScorers(){
+  try{
+    const d = await fetch(WEB+'/statistics/byathlete?region=us&lang=en&contentorigin=espn&isqualified=false&limit=50&sort=general.goals%3Adesc')
+      .then(r=>r.ok?r.json():null);
+    const out = parseByAthlete(d);
+    if(out.length) return out;
+  }catch(_){}
+  try{
+    const out = await coreLeaders();
+    if(out.length) return out;
+  }catch(_){}
+  return [];
+}
+
+// leaderboard del sito ESPN: cerca da sola la colonna dei gol
+function parseByAthlete(d){
+  const lista = (d && (d.athletes || (d.categories && d.categories[0] && d.categories[0].athletes))) || [];
+  const out = [];
+  for(const riga of lista){
+    const a = riga.athlete || riga;
+    const nome = a.displayName || a.fullName;
+    if(!nome) continue;
+    let gol = null;
+    for(const c of (riga.categories || a.categories || [])){
+      const nomi = c.names || c.labels || [];
+      const val = c.values || c.displayValues || [];
+      const i = nomi.findIndex(x => /^goals?$/i.test(x) || /goalsscored|totalgoals/i.test(x));
+      if(i >= 0){ gol = parseFloat(val[i]); break; }
+    }
+    if(!Number.isFinite(gol)) continue;
+    const t = a.team || riga.team || {};
+    out.push({ player:nome, team:t.abbreviation || t.shortDisplayName || '', goals:gol });
+  }
+  out.sort((a,b)=>b.goals-a.goals);
+  return out.filter(x=>x.goals>0).slice(0,20);
+}
+
+// ripiego: classifica marcatori del core API, con i nomi da risolvere
+async function coreLeaders(){
+  const d = await fetch(CORE+'/leaders').then(r=>r.ok?r.json():null);
+  const cats = (d && d.categories) || [];
+  const cat = cats.find(c => /^goals$/i.test(c.name||'')) ||
+              cats.find(c => /goal/i.test(c.name||'') && !/against|conceded|assist|saved/i.test(c.name||''));
+  if(!cat) return [];
+  const squadre = await teamMap();
+  const top = (cat.leaders||[]).slice(0,20);
+  const out = await Promise.all(top.map(async l => {
+    let nome = '';
+    const ref = l.athlete && l.athlete.$ref;
+    if(ref){
+      const a = await fetch(String(ref).replace(/^http:/,'https:')).then(r=>r.ok?r.json():null).catch(()=>null);
+      nome = (a && (a.displayName || a.fullName)) || '';
+    }
+    const id = String((l.team && l.team.$ref) || '').match(/teams\/(\d+)/);
+    return { player:nome, team: id ? (squadre[id[1]]||'') : '', goals: parseFloat(l.value != null ? l.value : l.displayValue) || 0 };
+  }));
+  return out.filter(x => x.player);
+}
+
+async function teamMap(){
+  if(teamMap.cache) return teamMap.cache;
+  const d = await fetch(ESPN+'/teams').then(r=>r.ok?r.json():null).catch(()=>null);
+  const m = {};
+  for(const t of ((((d||{}).sports||[])[0]||{}).leagues||[{}])[0].teams||[])
+    if(t.team) m[t.team.id] = t.team.abbreviation || t.team.shortDisplayName || '';
+  teamMap.cache = m;
+  return m;
+}
+
+function renderScorers(list){
+  const righe = list.map((s,i) => `<tr>
+    <td class="pos">${i+1}</td>
+    <td class="l">${boldSurname(s.player)}</td>
+    <td class="sq">${esc(s.team||'')}</td>
+    <td class="big">${esc(s.goals)}</td>
+  </tr>`).join('');
+  app.innerHTML = `<div class="roundtitle">Marcatori</div>
+    <table class="tab">
+      <tr><th class="l" colspan="2">Giocatore</th><th class="l">Squadra</th><th>Gol</th></tr>
+      ${righe}
+    </table>`;
 }
 
 function stamp(){
@@ -482,6 +684,7 @@ async function start(){
   setInterval(refreshCurrent, REFRESH_SECONDS*1000);
 }
 
+buildViewBar();
 start();
 </script>
 <script data-goatcounter="https://11235.goatcounter.com/count"
