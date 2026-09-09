@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Tabellone Serie A</title>
+<title>Tabellone Champions League</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@700;800&family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -26,20 +26,24 @@ header h1 span{color:#8FD9AC}
 .switch a.on{background:#fff;color:var(--prato-scuro);border-color:#fff}
 .pitchline{height:3px;background:repeating-linear-gradient(90deg,var(--prato) 0 24px,#2b9a5c 24px 48px)}
 
-/* barra delle giornate */
+/* barra dei turni */
 .rounds{background:var(--carta);border-bottom:1px solid var(--linea);display:flex;gap:6px;overflow-x:auto;padding:8px 12px;scrollbar-width:none}
 .rounds::-webkit-scrollbar{display:none}
 .rbtn{flex:0 0 auto;min-width:34px;height:34px;padding:0 4px;border-radius:9px;border:1px solid var(--linea);background:#fff;color:var(--grigio);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;cursor:pointer}
+.rbtn.wide{padding:0 9px;font-size:14px;letter-spacing:.04em}
 .rbtn.cur{border-color:var(--prato);color:var(--prato-scuro)}
 .rbtn.sel{background:var(--prato-scuro);border-color:var(--prato-scuro);color:#fff}
 @media (min-width:760px){
   .rounds{flex-wrap:wrap;overflow-x:visible;justify-content:center;gap:5px;max-width:760px;margin:0 auto}
   .rbtn{min-width:30px;height:30px;font-size:15px}
+  .rbtn.wide{font-size:13px}
 }
 
 main{padding:14px 12px 20px;max-width:640px;margin:0 auto}
+.roundtitle{font-family:'Archivo Expanded',sans-serif;font-weight:700;font-size:15px;letter-spacing:.02em;text-transform:uppercase;color:var(--prato-scuro);margin:2px 4px 10px}
 .group-label{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--grigio);margin:14px 4px 8px}
 .group-label:first-child{margin-top:2px}
+.roundtitle + .group-label{margin-top:4px}
 
 .match{background:var(--card);border:1px solid var(--linea);border-radius:14px;margin-bottom:10px;overflow:hidden}
 .mhead{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding:14px 14px 6px}
@@ -97,11 +101,11 @@ main{padding:14px 12px 20px;max-width:640px;margin:0 auto}
 <body>
 <div class="top">
   <header>
-    <h1>Tabellone <span>Serie A</span></h1>
+    <h1>Tabellone <span>Champions</span></h1>
     <div class="statusbar"><span id="clock">—</span>
       <nav class="switch">
-        <a href="index.html" class="on">Serie A</a>
-        <a href="champions.html">Champions</a>
+        <a href="index.html">Serie A</a>
+        <a href="champions.html" class="on">Champions</a>
       </nav>
     </div>
   </header>
@@ -118,14 +122,14 @@ main{padding:14px 12px 20px;max-width:640px;margin:0 auto}
 /* ============================================================================
    Pagina autosufficiente: legge direttamente da ESPN (endpoint pubblico non
    ufficiale) dal browser di chi guarda — l'unico canale che ESPN non blocca.
-   All'avvio scarica tutte le partite della stagione e le raggruppa in giornate
-   (ogni squadra gioca una volta per giornata: quando una si ripete, è iniziata
-   la giornata dopo). Aprendo una giornata scarica il "summary" di ogni partita
+   All'avvio scarica tutte le partite della stagione e le raggruppa in turni
+   (una squadra non gioca due volte nello stesso turno; fra un turno e l'altro
+   passano piu' giorni). Aprendo un turno scarica il "summary" di ogni partita
    per gol, cartellini e formazioni. Nessun file esterno, nessun Worker.
 ============================================================================ */
-const ESPN = 'https://site.api.espn.com/apis/site/v2/sports/soccer/ita.1';
-const TOTAL_ROUNDS_DEFAULT = 38;
+const ESPN = 'https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.champions';
 const REFRESH_SECONDS = 60;
+const MAX_GAP_DAYS = 3;    // oltre questo stacco fra due partite inizia un nuovo turno
 
 const app = document.getElementById('app');
 const clock = document.getElementById('clock');
@@ -137,9 +141,18 @@ const pad2 = n => String(n).padStart(2,'0');
 const GROUPS = [['live','In corso'],['finished','Finite'],['upcoming','Da giocare']];
 const GTAG = {penalty:'rig.', own:'aut.'};
 
+// fase a eliminazione diretta, nell'ordine: [nome, sigla, numero di gare]
+const KO_PHASES = [
+  ['Playoff','PO',2], ['Ottavi di finale','OTT',2], ['Quarti di finale','QF',2],
+  ['Semifinali','SF',2], ['Finale','FIN',1]
+];
+const LEGS = [['Andata','A'],['Ritorno','R']];
+const LEAGUE_PHASE_ROUNDS = 8;   // giornate della fase campionato
+
 let ROUNDS = {};        // { n: [eventi scoreboard] }
-let CURRENT = 1;        // giornata corrente
-let SELECTED = null;    // giornata mostrata
+let LABELS = {};        // { n: {long, short} }
+let CURRENT = 1;        // turno corrente
+let SELECTED = null;    // turno mostrato
 const cache = {};       // id partita -> { events, lineups } dal summary
 
 /* ---------- formattazione ------------------------------------------------- */
@@ -238,13 +251,14 @@ function toggleLineups(id){
   if(el) el.classList.toggle('open');
 }
 
-/* ---------- barra giornate ------------------------------------------------ */
+/* ---------- barra dei turni ----------------------------------------------- */
 function buildRoundsBar(){
-  const total = Object.keys(ROUNDS).length || TOTAL_ROUNDS_DEFAULT;
+  const keys = Object.keys(ROUNDS).map(Number).sort((a,b)=>a-b);
   let html = '';
-  for(let n=1;n<=total;n++){
-    const cls = 'rbtn' + (n===CURRENT?' cur':'') + (n===SELECTED?' sel':'');
-    html += `<button class="${cls}" onclick="selectRound(${n})">${n}</button>`;
+  for(const n of keys){
+    const l = LABELS[n] || {long:'Turno '+n, short:String(n)};
+    const cls = 'rbtn' + (l.short.length>2?' wide':'') + (n===CURRENT?' cur':'') + (n===SELECTED?' sel':'');
+    html += `<button class="${cls}" title="${esc(l.long)}" onclick="selectRound(${n})">${esc(l.short)}</button>`;
   }
   roundsBar.innerHTML = html;
   const selBtn = roundsBar.querySelector('.rbtn.sel');
@@ -262,8 +276,10 @@ function sortMatches(m){
 
 function render(matches){
   const ms = sortMatches(matches||[]);
-  if(!ms.length){ app.innerHTML = `<div class="msg">Nessuna partita in questa giornata.</div>`; return; }
-  let html = '';
+  const l = LABELS[SELECTED];
+  const title = l ? `<div class="roundtitle">${esc(l.long)}</div>` : '';
+  if(!ms.length){ app.innerHTML = title + `<div class="msg">Nessuna partita in questo turno.</div>`; return; }
+  let html = title;
   for(const [key,label] of GROUPS){
     const g = ms.filter(m=>m.status===key);
     if(!g.length) continue;
@@ -273,7 +289,7 @@ function render(matches){
 }
 
 /* ---------- lettura da ESPN ---------------------------------------------- */
-// tutte le partite della stagione, raggruppate in giornate
+// tutte le partite della stagione, raggruppate in turni
 async function fetchSeason(){
   const board = await fetch(ESPN+'/scoreboard?_='+Date.now(),{cache:'no-store'}).then(r=>{
     if(!r.ok) throw new Error('HTTP '+r.status); return r.json();
@@ -281,40 +297,85 @@ async function fetchSeason(){
   const lg = board.leagues[0];
   const parse = s => new Date(Date.UTC(+s.slice(0,4), +s.slice(5,7)-1, +s.slice(8,10)));
   const fmt = d => ''+d.getUTCFullYear()+pad2(d.getUTCMonth()+1)+pad2(d.getUTCDate());
-  const start = parse(lg.season.startDate), end = parse(lg.season.endDate);
+  let start = parse(lg.season.startDate);
+  const end = parse(lg.season.endDate);
+  // le qualificazioni estive restano fuori: la fase campionato parte a settembre
+  const sett = new Date(Date.UTC(start.getUTCFullYear(), 8, 1));
+  if(sett > start && sett < end) start = sett;
+  const cutoff = start.getTime();
 
   const ranges = [];
   let cur = new Date(start);
   while(cur <= end){
-    const blkEnd = new Date(Math.min(cur.getTime()+13*864e5, end.getTime()));
+    const blkEnd = new Date(Math.min(cur.getTime()+11*864e5, end.getTime()));
     ranges.push(fmt(cur)+'-'+fmt(blkEnd));
     cur = new Date(blkEnd.getTime()+864e5);
   }
 
   const results = await Promise.all(ranges.map(rng =>
-    fetch(ESPN+'/scoreboard?dates='+rng,{cache:'no-store'})
+    fetch(ESPN+'/scoreboard?limit=200&dates='+rng,{cache:'no-store'})
       .then(r=>r.ok?r.json():{events:[]}).catch(()=>({events:[]}))
   ));
 
   const seen = new Set(), events = [];
-  const addEvents = list => { for(const ev of (list||[])) if(!seen.has(ev.id)){ seen.add(ev.id); events.push(ev); } };
+  const addEvents = list => {
+    for(const ev of (list||[])){
+      if(!ev || seen.has(ev.id)) continue;
+      const cs = ev.competitions && ev.competitions[0] && ev.competitions[0].competitors;
+      if(!cs || cs.length < 2) continue;
+      // fuori i segnaposto del tabellone (squadre non ancora sorteggiate)
+      if(!cs.every(c=>c.team && c.team.id)) continue;
+      if(String(cs[0].team.id) === String(cs[1].team.id)) continue;
+      if(ev.date && new Date(ev.date).getTime() < cutoff) continue;
+      seen.add(ev.id); events.push(ev);
+    }
+  };
   addEvents(board.events);                 // "oggi" fresco: ha precedenza sui blocchi stagionali in cache
   for(const d of results) addEvents(d.events);
   events.sort((a,b)=>((a.date||'') < (b.date||'') ? -1 : 1));
 
   ROUNDS = groupRounds(events);
+  LABELS = labelRounds(ROUNDS);
   CURRENT = currentRoundOf(ROUNDS);
 }
 
+// nuovo turno quando una squadra si ripete oppure quando fra due partite
+// passano piu' di MAX_GAP_DAYS giorni
 function groupRounds(events){
-  const rounds = {}; let cur = [], seen = new Set(), n = 1;
+  const rounds = {}; let cur = [], seen = new Set(), n = 1, last = null;
   for(const ev of events){
     const ids = ev.competitions[0].competitors.map(c=>c.id);
-    if(ids.some(id=>seen.has(id))){ rounds[n]=cur; n++; cur=[]; seen=new Set(); }
+    const t = ev.date ? new Date(ev.date).getTime() : null;
+    const gap = (t!=null && last!=null) ? (t-last)/864e5 : 0;
+    if(cur.length && (ids.some(id=>seen.has(id)) || gap > MAX_GAP_DAYS)){
+      rounds[n]=cur; n++; cur=[]; seen=new Set();
+    }
     cur.push(ev); ids.forEach(id=>seen.add(id));
+    if(t!=null) last = t;
   }
   if(cur.length) rounds[n]=cur;
   return rounds;
+}
+
+// nomi dei turni: 8 giornate di fase campionato, poi playoff/ottavi/quarti/semi/finale
+function labelRounds(rounds){
+  const out = {}; let md = 0, ko = 0;
+  for(const n of Object.keys(rounds).map(Number).sort((a,b)=>a-b)){
+    if(ko===0 && md<LEAGUE_PHASE_ROUNDS && rounds[n].length>=10){
+      md++; out[n] = {long:'Giornata '+md, short:String(md)}; continue;
+    }
+    let i = ko, p = 0;
+    while(p < KO_PHASES.length && i >= KO_PHASES[p][2]){ i -= KO_PHASES[p][2]; p++; }
+    if(p < KO_PHASES.length){
+      const leg = KO_PHASES[p][2] > 1 ? LEGS[i] : null;
+      out[n] = { long: KO_PHASES[p][0] + (leg?' · '+leg[0]:''),
+                 short: KO_PHASES[p][1] + (leg?' '+leg[1]:'') };
+    } else {
+      out[n] = { long:'Turno '+n, short:String(n) };
+    }
+    ko++;
+  }
+  return out;
 }
 
 function currentRoundOf(rounds){
@@ -433,15 +494,16 @@ async function buildMatch(ev){
 
 async function selectRound(n){
   SELECTED = n; buildRoundsBar();
-  app.innerHTML = `<div class="msg"><div class="spin"></div>Carico la giornata ${n}…</div>`;
+  const l = LABELS[n];
+  app.innerHTML = `<div class="msg"><div class="spin"></div>Carico ${l?esc(l.long):'il turno '+n}…</div>`;
   const evs = ROUNDS[n] || [];
-  if(!evs.length){ app.innerHTML = `<div class="msg">Giornata ${n} non disponibile.</div>`; return; }
+  if(!evs.length){ app.innerHTML = `<div class="msg">Turno non disponibile.</div>`; return; }
   const matches = await Promise.all(evs.map(buildMatch));
   render(matches);
   stamp();
 }
 
-// aggiorna solo la giornata corrente (se la stai guardando)
+// aggiorna solo il turno corrente (se lo stai guardando)
 async function refreshCurrent(){
   if(SELECTED !== CURRENT) return;
   const evs = ROUNDS[CURRENT] || [];
@@ -450,7 +512,7 @@ async function refreshCurrent(){
   const fmt = iso => { const d=new Date(iso); return ''+d.getUTCFullYear()+pad2(d.getUTCMonth()+1)+pad2(d.getUTCDate()); };
   const rng = fmt(dates[0])+'-'+fmt(dates[dates.length-1]);
   try{
-    const d = await fetch(ESPN+'/scoreboard?dates='+rng+'&_='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null);
+    const d = await fetch(ESPN+'/scoreboard?limit=200&dates='+rng+'&_='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null);
     if(d && d.events){
       const byId = {}; d.events.forEach(e=>byId[e.id]=e);
       ROUNDS[CURRENT] = evs.map(e=>byId[e.id]||e);
