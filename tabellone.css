@@ -1,0 +1,124 @@
+/* Stile comune del tabellone. I colori stanno nelle pagine (:root e body.dark):
+   --carta --inchiostro --grigio --linea --card --live --pen --giallo --rosso
+   --accento --accento-scuro --accento-chiaro --testata-tenue --accento-righe --fondo-tenue
+   e, solo in body.dark, --su-accento --fondo-tenue --th-fondo */
+*{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{font-family:Inter,system-ui,sans-serif;background:var(--carta);color:var(--inchiostro);font-size:15px;line-height:1.45;padding-bottom:30px}
+
+.top{position:sticky;top:0;z-index:20}
+header{background:var(--accento-scuro);color:#fff;padding:13px 16px 11px}
+header h1{font-family:'Archivo Expanded',sans-serif;font-weight:800;font-size:19px;letter-spacing:.02em;text-transform:uppercase}
+header h1 span{color:var(--accento-chiaro)}
+.statusbar{display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--testata-tenue);margin-top:3px}
+.switch{margin-left:auto;display:flex;gap:5px}
+.switch button{font:inherit;cursor:pointer;background:transparent;-webkit-appearance:none;appearance:none}
+.switch a,.switch button{font-family:'Barlow Condensed',sans-serif;font-size:12.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--testata-tenue);text-decoration:none;padding:2px 10px;border:1px solid rgba(255,255,255,.25);border-radius:20px;white-space:nowrap}
+.switch a.on{background:#fff;color:var(--accento-scuro);border-color:#fff}
+.pitchline{height:3px;background:repeating-linear-gradient(90deg,var(--accento) 0 24px,var(--accento-righe) 24px 48px)}
+
+/* tema scuro */
+body.dark .rbtn,body.dark .vbtn{background:var(--card)}
+body.dark .rbtn.sel,body.dark .vbtn.sel{background:var(--accento);border-color:var(--accento);color:var(--su-accento)}
+body.dark .score,body.dark .actions a,body.dark .actions button{background:var(--fondo-tenue)}
+body.dark .match.live .score{background:#3A1E1A;color:#FF8C7C}
+body.dark .tab th{background:var(--th-fondo)}
+body.dark .errbar{background:#3A3115;color:#EBCB74}
+body.dark .ev .txt .min,
+body.dark .lu h4,
+body.dark .lu .subs .sub .min,
+body.dark .roundtitle,
+body.dark .rbtn.cur,
+body.dark .actions a,
+body.dark .actions button{color:var(--accento-chiaro)}
+body.dark .actions button:disabled{color:var(--linea)}
+
+/* selettore delle viste */
+.views{background:var(--carta);display:flex;gap:6px;padding:8px 12px 0;max-width:640px;margin:0 auto}
+.vbtn{flex:1 1 0;height:32px;border-radius:9px;border:1px solid var(--linea);background:#fff;color:var(--grigio);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.vbtn.sel{background:var(--accento-scuro);border-color:var(--accento-scuro);color:#fff}
+
+/* tabelle: classifica e marcatori */
+.tab{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--linea);border-radius:14px;overflow:hidden;margin-bottom:10px}
+.tab th{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--grigio);text-align:right;padding:9px 5px;line-height:1.15;border-bottom:1px solid var(--linea);background:var(--carta)}
+.tab td{padding:10px 5px;font-size:15px;text-align:right;border-bottom:1px solid var(--linea)}
+.tab td.l{font-size:14.5px}
+.tab tr:last-child td{border-bottom:0}
+.tab th.l,.tab td.l{text-align:left}
+.tab td.pos{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;color:var(--grigio);width:28px;padding-right:2px}
+.tab td.big{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:18px}
+.tab td.sq{font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--grigio);white-space:nowrap}
+.tab .tlogo{width:24px;height:24px;object-fit:contain;vertical-align:-7px;margin-right:7px}
+.tab tr.cut td{border-bottom:2px solid var(--accento-scuro)}
+.tabnote{color:var(--grigio);font-size:12.5px;line-height:1.4;margin:0 4px 16px}
+
+/* barra dei turni / giornate */
+.rounds{background:var(--carta);border-bottom:1px solid var(--linea);display:flex;gap:6px;overflow-x:auto;padding:8px 12px;scrollbar-width:none}
+.rounds::-webkit-scrollbar{display:none}
+.rbtn{flex:0 0 auto;min-width:34px;height:34px;padding:0 4px;border-radius:9px;border:1px solid var(--linea);background:#fff;color:var(--grigio);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;cursor:pointer}
+.rbtn.wide{padding:0 9px;font-size:14px;letter-spacing:.04em}
+.rbtn.cur{border-color:var(--accento);color:var(--accento-scuro)}
+.rbtn.sel{background:var(--accento-scuro);border-color:var(--accento-scuro);color:#fff}
+@media (min-width:760px){
+  .rounds{flex-wrap:wrap;overflow-x:visible;justify-content:center;gap:5px;max-width:760px;margin:0 auto}
+  .rbtn{min-width:30px;height:30px;font-size:15px}
+  .rbtn.wide{font-size:13px}
+}
+
+main{padding:14px 12px 20px;max-width:640px;margin:0 auto}
+.roundtitle{font-family:'Archivo Expanded',sans-serif;font-weight:700;font-size:15px;letter-spacing:.02em;text-transform:uppercase;color:var(--accento-scuro);margin:2px 4px 10px}
+.group-label{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--grigio);margin:14px 4px 8px}
+.group-label:first-child{margin-top:2px}
+.roundtitle + .group-label{margin-top:4px}
+
+.match{background:var(--card);border:1px solid var(--linea);border-radius:14px;margin-bottom:10px;overflow:hidden}
+.mhead{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding:14px 14px 6px}
+.team{font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:600;line-height:1.1;display:flex;align-items:center;gap:7px}
+.team.h{justify-content:flex-end}
+.team .tlogo{width:27px;height:27px;object-fit:contain;flex:0 0 auto}
+.score{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;letter-spacing:.02em;min-width:64px;text-align:center;padding:2px 6px;border-radius:8px;background:var(--fondo-tenue)}
+.match.live .score{background:#FBEAE8;color:var(--live)}
+.badge{display:block;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-top:3px;color:var(--grigio)}
+.match.live .badge{color:var(--live)}
+.match.live .badge::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--live);margin-right:5px;vertical-align:middle;animation:blink 1.4s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.when{text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:.03em;color:var(--grigio);padding:0 14px 10px}
+
+/* eventi: gol e cartellini, divisi casa (sx) / ospite (dx) */
+.events{border-top:1px dashed var(--linea);padding:9px 14px 10px;display:grid;grid-template-columns:1fr 1fr;gap:3px 12px}
+.ev{font-size:14px;display:flex;align-items:baseline;gap:6px}
+.ev.away{grid-column:2;flex-direction:row-reverse;text-align:right}
+.ev.home{grid-column:1}
+.ev .ic{flex:0 0 auto;font-size:13px;line-height:1}
+.ev .card{display:inline-block;width:10px;height:13px;border-radius:2px;transform:translateY(1px)}
+.ev .card.yellow{background:var(--giallo)}
+.ev .card.red{background:var(--rosso)}
+.ev .txt .min{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--accento-scuro)}
+.ev .txt .ast{display:block;font-size:12px;line-height:1.3;color:var(--grigio)}
+.ev.card-red .txt .min,.ev.card-yellow .txt .min{color:var(--grigio)}
+.noyet{color:var(--grigio);font-size:13px;padding:2px 0;grid-column:1 / -1}
+.ko{color:var(--grigio);font-size:13px;text-align:center;padding-top:2px;grid-column:1 / -1}
+
+/* azioni: link + toggle formazioni */
+.actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-top:1px solid var(--linea);padding:9px 14px}
+.actions a,.actions button{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--accento-scuro);background:var(--fondo-tenue);border:1px solid var(--linea);border-radius:20px;padding:4px 12px;text-decoration:none;cursor:pointer}
+.actions button:disabled{color:var(--linea);cursor:default}
+.actions .grow{margin-left:auto}
+
+.lineups{border-top:1px dashed var(--linea);padding:11px 14px 13px;display:none;grid-template-columns:1fr 1fr;gap:14px}
+.lineups.open{display:grid}
+.lu h4{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:.04em;color:var(--accento-scuro);margin-bottom:5px}
+.lu h4 span{color:var(--grigio);font-weight:600}
+.lu .p{font-size:13px;line-height:1.5}
+.lu .p b{font-family:'Barlow Condensed',sans-serif;font-weight:600;color:var(--grigio);display:inline-block;min-width:20px}
+.lu .bench{margin-top:6px;color:var(--grigio);font-size:12.5px;line-height:1.5}
+.lu .bench .bt{text-transform:uppercase;letter-spacing:.06em;font-size:10.5px;font-weight:700;display:block;margin-bottom:2px}
+.lu .subs{margin-top:6px;font-size:12.5px;line-height:1.55}
+.lu .subs .bt{text-transform:uppercase;letter-spacing:.06em;font-size:10.5px;font-weight:700;color:var(--grigio);display:block;margin-bottom:2px}
+.lu .subs .sub .min{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--accento-scuro);margin-right:4px}
+.lu .subs .sub .out{color:var(--grigio)}
+
+.msg{text-align:center;color:var(--grigio);padding:40px 16px;font-size:14px}
+.spin{width:26px;height:26px;border:3px solid var(--linea);border-top-color:var(--accento);border-radius:50%;margin:0 auto 12px;animation:rot 1s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.errbar{background:#FDF3D7;color:#8A6A06;font-size:12.5px;text-align:center;padding:7px 12px}
