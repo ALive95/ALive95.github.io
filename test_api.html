@@ -112,6 +112,7 @@ async function run(){
   h('Alternative per lo storico');
   await test('Giorno singolo senza trattino', BASE+'ita.1/scoreboard?dates=20260913', nEv);
   await test('Anno intero', BASE+'ita.1/scoreboard?dates=2026', nEv);
+  await test('Anno intero con limit=1000', BASE+'ita.1/scoreboard?limit=1000&dates=2026', nEv);
   await test('Altro host (site.web.api)', 'https://site.web.api.espn.com/apis/site/v2/sports/soccer/ita.1/scoreboard?dates=20260911-20260914', nEv);
   await test('Calendario squadra (Inter), giocate', BASE+'ita.1/teams/110/schedule', nEv);
   await test('Calendario squadra (Inter), da giocare', BASE+'ita.1/teams/110/schedule?fixture=true', nEv);

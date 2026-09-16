@@ -329,44 +329,46 @@ function render(matches){
 }
 
 /* ---------- lettura da ESPN ---------------------------------------------- */
-// ESPN rifiuta (HTTP 400) gli intervalli di date lunghi: si scarica a blocchi
-// di al massimo MAX_SPAN_DAYS giorni, pochi alla volta, con un secondo tentativo.
-const MAX_SPAN_DAYS = 4;
-const PARALLEL = 4;
+// ESPN (da settembre 2026) rifiuta con HTTP 400 gli intervalli "AAAAMMGG-AAAAMMGG".
+// Accetta l'anno intero (dates=AAAA) e il giorno singolo (dates=AAAAMMGG):
+// si prova per anni, e se la risposta sembra troncata si scende ai singoli giorni.
+const YEAR_LIMIT = 1000;
+const PARALLEL = 3;
 const ymd = d => ''+d.getUTCFullYear()+pad2(d.getUTCMonth()+1)+pad2(d.getUTCDate());
 
-// giorni (Date a mezzanotte UTC, ordinati) -> intervalli "AAAAMMGG-AAAAMMGG"
-function spanRanges(days){
-  const out = []; let a = null, b = null;
-  for(const d of days){
-    if(a && d - a < MAX_SPAN_DAYS*864e5){ b = d; continue; }
-    if(a) out.push(ymd(a)+'-'+ymd(b));
-    a = b = d;
-  }
-  if(a) out.push(ymd(a)+'-'+ymd(b));
-  return out;
-}
-
-async function fetchRanges(ranges, query){
-  const get = rng => fetch(ESPN+'/scoreboard?'+query+'dates='+rng,{cache:'no-store'})
-    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
+// una richiesta per valore di dates, PARALLEL alla volta, con un secondo tentativo
+async function fetchDates(list, query){
+  // secondo tentativo solo se la rete non ha risposto, mai su errori HTTP
+  let httpErr = false;
+  const get = v => fetch(ESPN+'/scoreboard?'+query+'dates='+v,{cache:'no-store'})
+    .then(r=>{ if(!r.ok){ httpErr = true; return {events:[], _ko:true}; } return r.json(); })
+    .then(j=>({ok:!j._ko, events:j.events||[]}));
   const out = [];
-  for(let i=0;i<ranges.length;i+=PARALLEL){
-    const part = await Promise.all(ranges.slice(i,i+PARALLEL).map(rng =>
-      get(rng).catch(()=>get(rng)).catch(()=>({events:[]}))));
+  for(let i=0;i<list.length;i+=PARALLEL){
+    const part = await Promise.all(list.slice(i,i+PARALLEL).map(v =>
+      get(v).catch(()=>get(v)).catch(()=>({ok:false, events:[]}))));
     out.push(...part);
+    if(httpErr) break;                 // ESPN rifiuta: non insistere con il resto
   }
   return out;
 }
 
-// giorni di gioco dal calendario ESPN; se manca, tutti i giorni fra start e end
+// giorni di gioco dal calendario ESPN (vuoto se il calendario non e' un elenco di date)
 function seasonDays(lg, start, end, parse){
-  let days = (lg.calendar||[])
-    .map(c => parse(typeof c==='string' ? c : String((c&&c.startDate)||'')))
+  let days = (lg.calendar||[]).filter(c=>typeof c==='string').map(parse)
     .filter(d => !isNaN(d) && d >= start && d <= end);
-  if(!days.length) for(let t=start.getTime(); t<=end.getTime(); t+=864e5) days.push(new Date(t));
   return days.sort((a,b)=>a-b);
 }
+
+async function seasonEvents(lg, start, end, parse, query){
+  const years = [];
+  for(let y=start.getUTCFullYear(); y<=end.getUTCFullYear(); y++) years.push(String(y));
+  const byYear = await fetchDates(years, 'limit='+YEAR_LIMIT+'&');
+  // 100 e' il limite predefinito di ESPN: se esce esattamente 100, il parametro limit e' stato ignorato
+  if(byYear.every(d => d.ok && d.events.length < YEAR_LIMIT && d.events.length !== 100)) return byYear;
+  return fetchDates(seasonDays(lg, start, end, parse).map(ymd), query);
+}
+
 // tutte le partite della stagione, raggruppate in turni
 async function fetchSeason(){
   const board = await fetch(ESPN+'/scoreboard?_='+Date.now(),{cache:'no-store'}).then(r=>{
@@ -381,7 +383,7 @@ async function fetchSeason(){
   if(sett > start && sett < end) start = sett;
   const cutoff = start.getTime();
 
-  const results = await fetchRanges(spanRanges(seasonDays(lg, start, end, parse)), 'limit=200&');
+  const results = await seasonEvents(lg, start, end, parse, 'limit=200&');
 
   const seen = new Set(), events = [];
   const addEvents = list => {
@@ -392,7 +394,7 @@ async function fetchSeason(){
       // fuori i segnaposto del tabellone (squadre non ancora sorteggiate)
       if(!cs.every(c=>c.team && c.team.id)) continue;
       if(String(cs[0].team.id) === String(cs[1].team.id)) continue;
-      if(ev.date && new Date(ev.date).getTime() < cutoff) continue;
+      if(ev.date && (new Date(ev.date).getTime() < cutoff || new Date(ev.date).getTime() >= end.getTime()+864e5)) continue;
       seen.add(ev.id); events.push(ev);
     }
   };
@@ -585,9 +587,9 @@ async function refreshCurrent(){
   const evs = ROUNDS[CURRENT] || [];
   const dates = evs.map(e=>e.date).filter(Boolean).sort();
   if(!dates.length) return;
-  const days = [...new Set(dates.map(iso=>{ const d=new Date(iso); return Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()); }))].map(t=>new Date(t));
+  const days = [...new Set(dates.map(iso=>ymd(new Date(iso))))];
   try{
-    const res = await fetchRanges(spanRanges(days), 'limit=200&_='+Date.now()+'&');
+    const res = await fetchDates(days, 'limit=200&_='+Date.now()+'&');
     const all = res.flatMap(d=>d.events||[]);
     if(all.length){
       const byId = {}; all.forEach(e=>byId[e.id]=e);
