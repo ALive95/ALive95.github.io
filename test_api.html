@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Test API ESPN</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@700&family=Barlow+Condensed:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{--verde:#17532f;--ok:#1d7a3e;--ko:#b3261e;--warn:#9a6700;--bg:#f5f4ef;--card:#fff;--line:#e2e0d8;--txt:#1b1b1b;--muted:#6b6b6b}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:Inter,system-ui,sans-serif;font-size:14px}
+  header{background:var(--verde);color:#fff;padding:18px 16px}
+  h1{margin:0;font-family:'Archivo Expanded',sans-serif;font-size:20px}
+  header p{margin:6px 0 0;font-family:'Barlow Condensed',sans-serif;letter-spacing:.04em;opacity:.85}
+  main{padding:12px;max-width:760px;margin:0 auto}
+  button{font-family:'Barlow Condensed',sans-serif;font-size:17px;letter-spacing:.04em;background:var(--verde);color:#fff;border:0;border-radius:10px;padding:10px 18px;margin:4px 0 12px}
+  button:disabled{opacity:.5}
+  .t{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+  .row{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .name{font-weight:600}
+  .st{font-family:'Barlow Condensed',sans-serif;font-size:16px;white-space:nowrap}
+  .ok{color:var(--ok)} .ko{color:var(--ko)} .warn{color:var(--warn)} .wait{color:var(--muted)}
+  .url{font-size:11px;color:var(--muted);word-break:break-all;margin-top:4px}
+  .det{margin-top:4px}
+  h2{font-family:'Barlow Condensed',sans-serif;font-size:18px;letter-spacing:.04em;margin:18px 0 8px;color:var(--verde)}
+</style>
+</head>
+<body>
+<header>
+  <h1>TEST API ESPN</h1>
+  <p id="info">Le richieste partono da questo browser, come nel tabellone</p>
+</header>
+<main>
+  <button id="go">Esegui i test</button>
+  <div id="out"></div>
+</main>
+<script>
+const BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer/';
+const V2   = 'https://site.api.espn.com/apis/v2/sports/soccer/';
+const pad2 = n => String(n).padStart(2,'0');
+const ymd  = d => ''+d.getUTCFullYear()+pad2(d.getUTCMonth()+1)+pad2(d.getUTCDate());
+const out  = document.getElementById('out');
+const esc  = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+function card(name, url){
+  const el = document.createElement('div');
+  el.className = 't';
+  el.innerHTML = `<div class="row"><span class="name">${esc(name)}</span><span class="st wait">...</span></div>
+    <div class="det"></div><div class="url">${esc(url)}</div>`;
+  out.appendChild(el);
+  return el;
+}
+
+// esito: {ok, status, ms, json, err}
+async function call(url){
+  const t0 = performance.now();
+  try{
+    const r = await fetch(url, {cache:'no-store'});
+    const ms = Math.round(performance.now()-t0);
+    let json = null;
+    try{ json = await r.json(); }catch(_){}
+    return {ok:r.ok, status:r.status, ms, json};
+  }catch(e){
+    return {ok:false, status:0, ms:Math.round(performance.now()-t0), err:String(e.message||e)};
+  }
+}
+
+async function test(name, url, describe){
+  const el = card(name, url);
+  const res = await call(url);
+  const st = el.querySelector('.st'), det = el.querySelector('.det');
+  if(res.status === 0){
+    st.className = 'st ko'; st.textContent = 'NESSUNA RISPOSTA';
+    det.textContent = 'Richiesta bloccata o rete assente (' + res.err + '). Il browser non distingue tra CORS, blocco e rete.';
+  }else if(!res.ok){
+    st.className = 'st ko'; st.textContent = 'HTTP ' + res.status + ' · ' + res.ms + ' ms';
+    det.textContent = res.json && res.json.message ? res.json.message : '';
+  }else{
+    const txt = describe ? describe(res.json) : '';
+    const warn = /^0 partite/.test(txt);
+    st.className = 'st ' + (warn ? 'warn' : 'ok'); st.textContent = 'HTTP ' + res.status + ' · ' + res.ms + ' ms';
+    det.textContent = txt;
+  }
+  return res;
+}
+
+const nEv = j => (j && j.events ? j.events.length : 0) + ' partite';
+
+async function run(){
+  const btn = document.getElementById('go');
+  btn.disabled = true; out.innerHTML = '';
+  const h = t => { const e=document.createElement('h2'); e.textContent=t; out.appendChild(e); };
+
+  h('Scoreboard di base');
+  const sa = await test('Serie A, oggi', BASE+'ita.1/scoreboard?_='+Date.now(), j => {
+    const lg = j && j.leagues && j.leagues[0];
+    return nEv(j) + (lg ? ' · stagione ' + (lg.season&&lg.season.startDate||'?').slice(0,10) + ' / ' + (lg.season&&lg.season.endDate||'?').slice(0,10)
+      + ' · calendario: ' + (lg.calendar||[]).length + ' giorni' : ' · nessuna lega');
+  });
+  await test('Champions, oggi', BASE+'uefa.champions/scoreboard?_='+Date.now(), j => {
+    const lg = j && j.leagues && j.leagues[0];
+    return nEv(j) + (lg ? ' · calendario: ' + (lg.calendar||[]).length + ' voci' : '');
+  });
+
+  h('Lunghezza massima degli intervalli di date');
+  const from = new Date(Date.UTC(2026,8,11));   // 11/09/2026, inizio 4a giornata
+  for(const days of [1,4,5,7,10,14]){
+    const to = new Date(from.getTime() + (days-1)*864e5);
+    await test(days + (days===1?' giorno':' giorni'), BASE+'ita.1/scoreboard?dates='+ymd(from)+'-'+ymd(to), nEv);
+  }
+
+  h('Altri endpoint');
+  let evId = sa.json && sa.json.events && sa.json.events[0] && sa.json.events[0].id;
+  if(!evId) evId = '401874966';
+  await test('Summary partita ' + evId, BASE+'ita.1/summary?event='+evId, j =>
+    (j && j.header ? 'ok' : 'struttura inattesa') + ' · keyEvents: ' + (j && j.keyEvents ? j.keyEvents.length : 0)
+    + ' · formazioni: ' + (j && j.rosters ? j.rosters.length : 0));
+  await test('Classifica Serie A', V2+'ita.1/standings?_='+Date.now(), j => {
+    const e = j && j.children && j.children[0] && j.children[0].standings && j.children[0].standings.entries;
+    return e ? e.length + ' squadre' : 'struttura inattesa';
+  });
+
+  document.getElementById('info').textContent = 'Ultimo test ' + new Date().toLocaleTimeString('it-IT');
+  btn.disabled = false;
+}
+
+document.getElementById('go').addEventListener('click', run);
+run();
+</script>
+</body>
+</html>
