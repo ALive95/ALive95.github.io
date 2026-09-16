@@ -109,6 +109,15 @@ async function run(){
     await test(days + (days===1?' giorno':' giorni'), BASE+'ita.1/scoreboard?dates='+ymd(from)+'-'+ymd(to), nEv);
   }
 
+  h('Alternative per lo storico');
+  await test('Giorno singolo senza trattino', BASE+'ita.1/scoreboard?dates=20260913', nEv);
+  await test('Anno intero', BASE+'ita.1/scoreboard?dates=2026', nEv);
+  await test('Altro host (site.web.api)', 'https://site.web.api.espn.com/apis/site/v2/sports/soccer/ita.1/scoreboard?dates=20260911-20260914', nEv);
+  await test('Calendario squadra (Inter), giocate', BASE+'ita.1/teams/110/schedule', nEv);
+  await test('Calendario squadra (Inter), da giocare', BASE+'ita.1/teams/110/schedule?fixture=true', nEv);
+  await test('Core API, eventi 11-14/09', 'https://sports.core.api.espn.com/v2/sports/soccer/leagues/ita.1/events?dates=20260911-20260914&limit=100', j =>
+    (j && j.items ? j.items.length : 0) + ' riferimenti' + (j && j.count != null ? ' · count ' + j.count : ''));
+
   h('Altri endpoint');
   let evId = sa.json && sa.json.events && sa.json.events[0] && sa.json.events[0].id;
   if(!evId) evId = '401874966';
