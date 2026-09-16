@@ -314,6 +314,44 @@ function render(matches){
 }
 
 /* ---------- lettura da ESPN ---------------------------------------------- */
+// ESPN rifiuta (HTTP 400) gli intervalli di date lunghi: si scarica a blocchi
+// di al massimo MAX_SPAN_DAYS giorni, pochi alla volta, con un secondo tentativo.
+const MAX_SPAN_DAYS = 4;
+const PARALLEL = 4;
+const ymd = d => ''+d.getUTCFullYear()+pad2(d.getUTCMonth()+1)+pad2(d.getUTCDate());
+
+// giorni (Date a mezzanotte UTC, ordinati) -> intervalli "AAAAMMGG-AAAAMMGG"
+function spanRanges(days){
+  const out = []; let a = null, b = null;
+  for(const d of days){
+    if(a && d - a < MAX_SPAN_DAYS*864e5){ b = d; continue; }
+    if(a) out.push(ymd(a)+'-'+ymd(b));
+    a = b = d;
+  }
+  if(a) out.push(ymd(a)+'-'+ymd(b));
+  return out;
+}
+
+async function fetchRanges(ranges, query){
+  const get = rng => fetch(ESPN+'/scoreboard?'+query+'dates='+rng,{cache:'no-store'})
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
+  const out = [];
+  for(let i=0;i<ranges.length;i+=PARALLEL){
+    const part = await Promise.all(ranges.slice(i,i+PARALLEL).map(rng =>
+      get(rng).catch(()=>get(rng)).catch(()=>({events:[]}))));
+    out.push(...part);
+  }
+  return out;
+}
+
+// giorni di gioco dal calendario ESPN; se manca, tutti i giorni fra start e end
+function seasonDays(lg, start, end, parse){
+  let days = (lg.calendar||[])
+    .map(c => parse(typeof c==='string' ? c : String((c&&c.startDate)||'')))
+    .filter(d => !isNaN(d) && d >= start && d <= end);
+  if(!days.length) for(let t=start.getTime(); t<=end.getTime(); t+=864e5) days.push(new Date(t));
+  return days.sort((a,b)=>a-b);
+}
 // tutte le partite della stagione, raggruppate in giornate
 async function fetchSeason(){
   const board = await fetch(ESPN+'/scoreboard?_='+Date.now(),{cache:'no-store'}).then(r=>{
@@ -321,21 +359,9 @@ async function fetchSeason(){
   });
   const lg = board.leagues[0];
   const parse = s => new Date(Date.UTC(+s.slice(0,4), +s.slice(5,7)-1, +s.slice(8,10)));
-  const fmt = d => ''+d.getUTCFullYear()+pad2(d.getUTCMonth()+1)+pad2(d.getUTCDate());
   const start = parse(lg.season.startDate), end = parse(lg.season.endDate);
 
-  const ranges = [];
-  let cur = new Date(start);
-  while(cur <= end){
-    const blkEnd = new Date(Math.min(cur.getTime()+13*864e5, end.getTime()));
-    ranges.push(fmt(cur)+'-'+fmt(blkEnd));
-    cur = new Date(blkEnd.getTime()+864e5);
-  }
-
-  const results = await Promise.all(ranges.map(rng =>
-    fetch(ESPN+'/scoreboard?dates='+rng,{cache:'no-store'})
-      .then(r=>r.ok?r.json():{events:[]}).catch(()=>({events:[]}))
-  ));
+  const results = await fetchRanges(spanRanges(seasonDays(lg, start, end, parse)), '');
 
   const seen = new Set(), events = [];
   const addEvents = list => { for(const ev of (list||[])) if(!seen.has(ev.id)){ seen.add(ev.id); events.push(ev); } };
@@ -488,12 +514,12 @@ async function refreshCurrent(){
   const evs = ROUNDS[CURRENT] || [];
   const dates = evs.map(e=>e.date).filter(Boolean).sort();
   if(!dates.length) return;
-  const fmt = iso => { const d=new Date(iso); return ''+d.getUTCFullYear()+pad2(d.getUTCMonth()+1)+pad2(d.getUTCDate()); };
-  const rng = fmt(dates[0])+'-'+fmt(dates[dates.length-1]);
+  const days = [...new Set(dates.map(iso=>{ const d=new Date(iso); return Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()); }))].map(t=>new Date(t));
   try{
-    const d = await fetch(ESPN+'/scoreboard?dates='+rng+'&_='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null);
-    if(d && d.events){
-      const byId = {}; d.events.forEach(e=>byId[e.id]=e);
+    const res = await fetchRanges(spanRanges(days), '_='+Date.now()+'&');
+    const all = res.flatMap(d=>d.events||[]);
+    if(all.length){
+      const byId = {}; all.forEach(e=>byId[e.id]=e);
       ROUNDS[CURRENT] = evs.map(e=>byId[e.id]||e);
       ROUNDS[CURRENT].forEach(e=>{
         const st = e.status && e.status.type && e.status.type.state;
